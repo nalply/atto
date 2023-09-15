@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# @web/test-runner config in web-test-runner.config.js
+
+WEB_TEST_RUNNER="node_modules/.bin/web-test-runner"
+echo $WEB_TEST_RUNNER starting...
+eval "DEBUG=t-r:* $WEB_TEST_RUNNER"
+
+# Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+

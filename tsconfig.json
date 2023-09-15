@@ -1,0 +1,52 @@
+{
+  "lib": [ "ES2022", "DOM", "DOM.Iterable" ],
+  "include": [ "*.ts" ],
+  
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "skipLibCheck": false,
+
+    "outDir": "dist",
+    "baseUrl": ".",
+    "sourceMap": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+
+    "strict": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "allowSyntheticDefaultImports": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+
+// Let me add some rationales for some configuration options here.
+//
+// verbatimModuleSyntax forces you to prepend `type` in fromt of type imports
+// or exports. It makes visible which import/exports will be elided because
+// they concern types, not value. I find it clear and useful.
+//
+// noFallthroughCasesInSwitch disallows cases with fallthrough. I always
+// comment fallthrough if I use it and want to be able to use fallthrough.
+//
+// noPropertyAccssFromIndexSignature enforces bracket syntax for types like
+// this: { [key: string]: number } to help discern between objects with
+// compile-time known properties and with dynamic properties. However both
+// bracket and dot syntax just give undefined for missing properties. This
+// does not pull the weight of this option, so this is not included here.
+// I only use bracket syntax if the property name is dynamic but not if the
+// property name is known to be a fixed string, I use the dot syntax even
+// if the property is generated dynamically because I find the bracket
+// syntax unwieldy.
+
+// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
