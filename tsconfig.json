@@ -8,13 +8,13 @@
     "moduleResolution": "node16",
     "verbatimModuleSyntax": true,
     "esModuleInterop": true,
-    "skipLibCheck": false,
 
     "outDir": "dist",
     "baseUrl": ".",
     "sourceMap": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
+    "skipLibCheck": true,
 
     "strict": true,
     "allowUnusedLabels": false,

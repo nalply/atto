@@ -2,15 +2,16 @@
   "name": "atto",
   "type": "module",
   "version": "0.0.1",
-  "description": "atto - a simple document language",
+  "description": "A simple and untyped document/configuration language",
   "license": "ISC",
   "devDependencies": {
     "@esm-bundle/chai": "^4.3.4-fix.0",
-    "@types/moo": "^0.5.6",
     "@web/dev-server": "0",
     "@web/dev-server-esbuild": "^0.4.1",
     "@web/test-runner": "^0.16.1",
     "@web/test-runner-playwright": "^0.10.1",
+    "@web/test-runner-puppeteer": "^0.14.0",
+    "typedoc": "^0.25.2",
     "typescript": "5"
   },
   "author": "see AUTHORS",

@@ -1,6 +1,6 @@
 import { expect } from '@esm-bundle/chai'
-
 import { compileLexer, type Token } from './lex.ts'
+
 import { lexer } from './lexer.ts'
 
 function test(text: string, dbg: boolean = false): string {

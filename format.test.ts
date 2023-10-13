@@ -1,11 +1,11 @@
-import { expect, AssertionError } from '@esm-bundle/chai'
+import { expect } from '@esm-bundle/chai'
 
-import { format } from './atto.ts'
+import { format } from './format.ts'
 
 function fmt(doc: any): string {
   const s = format(doc, { style: 'compact' })
   if (!s.startsWith("# atto\n"))
-    throw new AssertionError("bad or no header (# atto)")
+    throw new Error("bad or no header (# atto)")
   return s.substring(7)
 }
   

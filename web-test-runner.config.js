@@ -1,8 +1,12 @@
-import { playwrightLauncher } from '@web/test-runner-playwright'
 import { esbuildPlugin } from "@web/dev-server-esbuild"
 
-const chromium = playwrightLauncher({ product: 'chromium' })
-const firefox = playwrightLauncher({ product: 'firefox' })
+import { puppeteerLauncher } from '@web/test-runner-puppeteer'
+const puppeteerChrome = puppeteerLauncher()
+
+import { playwrightLauncher } from '@web/test-runner-playwright'
+const playwrightChromium = playwrightLauncher({ product: 'chromium' })
+const playwrightFirefox = playwrightLauncher({ product: 'firefox' })
+
 
 const hostname = "localhost"
 const port = 32117
@@ -17,12 +21,15 @@ async function emptyFavicon(ctx, next) {
   if (ctx.url === "/favicon.ico") {
     ctx.status = 200
     ctx.body = ""
-    console.log(ctx.url)
+    // console.log(ctx.url)
     return
   }
   
   await next(ctx)
 }
+
+console.warn("playwright does not work under Arch", 
+  playwrightChromium, playwrightFirefox)
 
 export default {
   files: "*.test.ts",
@@ -32,8 +39,9 @@ export default {
   rootDir: ".",
   middleware: [ emptyFavicon ], 
   plugins: [ esbuild ],
+  puppeteer: true,
   playwright: true,
-  browsers: [ chromium ],
+  browsers: [ puppeteerChrome ],
   nodeResolve: true,
 }
 

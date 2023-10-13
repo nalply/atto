@@ -28,14 +28,35 @@ it('parse strings', () => {
   
 })
 
-// Delayed evaluation for error handling in expect()
-const dparse = (s: string) => (() => parse(s))
-const err = (s: string) => [ ParseError, new RegExp(`^${ s }$`) ] as any
+// s`text ${0}` is same as `text ${0}`
+function s(strings: TemplateStringsArray, ...values: any[]) {
+  return strings.reduce(
+    (acc, curr, i) => acc += curr + values[i - 1]
+  )
+}
+
+// Usage: expectErr <text> <err> where <text> and <err> are template strings
+// Example: expectErr `:` `invalid atom : at \\d:\\d`
+// Task: parse <text> & expect ParseError(<err>), <err> supports regex syntax
+function expectErr(textParts: TemplateStringsArray, ...textValues: any[]) {
+  const text = s(textParts, textValues)
+  return function(errParts: TemplateStringsArray, ...errValues: any[]) {
+    const err = s(errParts, errValues)
+    expect(() => parse(text)).to.throw(ParseError, new RegExp(`^${ err }$`))
+  }
+}
 
 it('parse errors', () => {
-  expect(dparse(":")).to.throw(...err('invalid atom `:` at 1:1'))
-  expect(dparse("\0:0")).to.throw(...err('invalid atom `‹00›` at 1:1'))
-  // todo handle parse("") and parse(" ") (error empty document)
+  expectErr ``        `unexpected end of text at 1:1`
+  expectErr ` `       `unexpected end of text at 1:2`
+  expectErr `:`       `invalid atom : at 1:1`
+  expectErr `a`       `unexpected end of text at 1:2`
+  expectErr `a(`      `no colon after key at 1:2`
+  expectErr `a"a"`    `no colon after key at 1:2` // todo
+  expectErr `\0:0`    `invalid atom ‹00› at 1:1`
+  expectErr `a:(a())` `no whitespace between values at 1:5`
+  expectErr `a:(a (`  `unexpected end of text at 1:7`
+  expectErr `a:(a ()` `unexpected end of text at 1:8`
 })
 
 import { compileLexer } from './lex.ts'
@@ -47,7 +68,7 @@ const atto = {
   compileLexer, lexer,
 }
 
-Object.assign(window, { atto })
+Object.assign(window, { atto, expectErr })
 
 // Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
 

@@ -1,6 +1,6 @@
-# Atto Document Language
+# atto
 
-The Atto Document Language (atto) is untyped and minimal. It has atoms,
+atto is an untyped and simple document/configuration language. It has atoms,
 values, lists and documents and also comments.
 
 An atom is a bare word, a string or a guarded string.
@@ -54,11 +54,12 @@ List     := Value*
 
 ## Status
 
-TypeScript POC in development with `@web/test-runner` without bundling
+TypeScript POC in development with `@web/test-runner` without bundling.
 
 Thanks to KillyMXI for inspiring me with his TypeScript lexer
-[leac](https://github.com/mxxii/leac/blob/main/docs/index.md). I copied
-his line-column query virtually unchanged (positionQuery.ts).
+[leac](https://github.com/mxxii/leac/blob/main/docs/index.md). With his
+permission I copied his line-column query virtually unchanged
+(`positionQuery.ts`).
 
 ## Examples
 

@@ -7,30 +7,44 @@ export function parse(text: string, dbg: boolean = false): Document {
   const tokenizer = lexer.tokenizerBuilder(text)
   lexer.dbg = dbg
 
-  const parse = new Parse(tokenizer)
-  const result = parse.document()
-  if (result === STOP) throw new ParseError(parse.errors.join("\n"))
-
-  return result
+  const document = new Parse(tokenizer).document(undefined, "top")
+  if (isStop(document)) error("todo unexpected")
+  return document
 }
 
 export class ParseError extends Error {
   constructor(msg: string) { super(msg) }
 }
 
+export type Location = { line: number, column: number }
+
 export const STOP = Symbol('STOP')
+
+export type Stop = Partial<Location> & { stop: typeof STOP }
+
 export const CONTINUE = Symbol('CONTINUE')
 export const END = Symbol('END')
+export const FINAL = Symbol('FINAL')
 export const REQUIRED = Symbol('REQUIRED')
 
-type STOP = typeof STOP
 type CONTINUE = typeof CONTINUE
 type END = typeof END
 type REQUIRED = typeof REQUIRED
 
+function stop(location: Partial<Location> = {}): Stop {
+  return { stop: STOP, ...location}
+}
+
+function isStop(value: any): value is Stop {
+  return value?.stop === STOP
+}
+
+function error(error: string, { line, column }: Partial<Location> = {}): never {
+  const loc = line ? " at " + line + (column ? ":" + column : "") : ""
+  throw new ParseError(error + loc)
+}
+
 export class Parse {
-  line: number = 0
-  column: number = 0
   readonly held: Token[] = []
   readonly tokenizer: Tokenizer
   readonly errors: string[] = []
@@ -41,8 +55,6 @@ export class Parse {
 
   next(): Token {
     const token = this.held.pop() ?? this.tokenizer.nextToken()
-    this.line = token.line
-    this.column = token.column
     return token
   }
 
@@ -51,35 +63,32 @@ export class Parse {
     return result as T
   }
 
-  error(error: string): STOP {
-    const location = " at " + this.line + ":" + this.column
-    this.errors.push(error + location)
-    return STOP
-  }
-  
-  document(firstKey?: Atom): Document | STOP {
+  document(firstKey?: Atom, top?: "top"): Document | Stop {
     this.ws()
     const firstEntry = this.entry(firstKey)
-    if (firstEntry == STOP) return STOP
+    if (isStop(firstEntry)) return firstEntry
     
     const document = { [firstEntry.key]: firstEntry.value }
     while (true) {
-      const ws = this.ws(REQUIRED)
-      if (ws == END) return document
-      if (ws == STOP) return this.error("no whitespace between entries")
+      const ws = this.ws(REQUIRED, top)
+      if (ws === END) return document
+      if (isStop(ws)) error("no whitespace between entries", ws)
        
       const entry = this.entry()
-      if (entry === STOP) return STOP
+      if (isStop(entry)) return entry
       document[entry.key] = entry.value
     }
   }
 
-  ws(opt?: REQUIRED): END | STOP | void {
+  ws(opt?: REQUIRED, top?: "top"): END | Stop | void {
     let token = this.next()
     if (token.name === ')') return END
-    if (token.name === 'FINAL') return this.back(token, END)
+    if (token.name === 'FINAL')
+      return top === "top" 
+        ? this.back(token, END)
+        : error("unexpected end of text", token)
     if (token.name !== 'ws')
-      return opt === REQUIRED ? STOP : this.back(token)
+      return opt === REQUIRED ? stop(token) : this.back(token)
 
     while (true) {
       token = this.next()
@@ -91,54 +100,55 @@ export class Parse {
     }
   }
 
-  entry(key?: Atom | STOP): Entry | STOP {
+  entry(key?: Atom | Stop): Entry | Stop {
     if (key == null) {
       const atom = this.atom()
       if (atom === CONTINUE) // TS didn't catch that CONTINUE isn't returned
-        return this.error("internal error") // so let's guard by this error
+        return error("internal error") // so let's guard this error
       key = atom
     }
-    if (key === STOP) return STOP
+    if (isStop(key)) return key
 
     this.ws()
     const token = this.next()
     if (token.name !== ":")
-      return this.error("no colon between key and value")
+      return error("no colon after key", token)
     this.ws()
 
     const value = this.value()
-    if (value === STOP || value === END)
-      return this.error("no value for entry")
+    if (isStop(value) || value === END)
+      return error("no value for entry")
 
     return { key, value }
   }
 
-  atom(opt?: CONTINUE): Atom | STOP | CONTINUE {
+  atom(opt?: CONTINUE): Atom | Stop | CONTINUE {
     let token = this.next()
 
     if (token.name === "bare") return token.text
     if (token.text === `"`) return this.str()
     if (token.name === `#`) return this.guardStr()
     
-    if (token.name === 'FINAL') return this.error("unexpected end of text")
+    if (token.name === 'FINAL')
+      return error("unexpected end of text", token)
 
     if (opt === CONTINUE) {
       this.back(token)
       return CONTINUE
     }
 
-    const escOpt = "guillemet"
-    return this.error("invalid atom `" + strEsc(token.text, escOpt) + "`")
+    const esc = strEsc(token.text, "guillemet")
+    return error("invalid atom " + esc, token)
   }
 
-  value(): Value | STOP | END {
+  value(): Value | Stop | END {
     const atom = this.atom(CONTINUE)
-    if (atom !== CONTINUE) return atom // Atom | STOP
+    if (atom !== CONTINUE) return atom // Atom | Stop
 
     const token = this.next()
     if (token.name === "(") {
       const first = this.value()
-      if (first === STOP) return STOP
+      if (isStop(first)) return first
       if (first === END) return [] // ")" follows immediately == emtpy list
 
       const optColon = this.next()
@@ -151,40 +161,40 @@ export class Parse {
     if (token.name === ")")
       return END
 
-    return this.error("invalid value `" + token.text + "`")
+    return error("invalid value `" + token.text + "`")
   }
 
-  str(): Atom | STOP {
+  str(): Atom | Stop {
     let atom = ""
     while (true) {
       const token = this.next()
 
       switch (token.name) {
-        case "FINAL": return this.error("unexpected end of text in string")
+        case "FINAL": return error("unexpected end of text in string")
         case `"`: return atom
         case "chars": atom += token.text; break
         case `\\`: break
         case "esc": atom += unesc(token.text); break
-        default: return this.error("internal error, unexpected " + token.name)
+        default: return error("internal error, unexpected " + token.name)
       }
     }
   }
 
-  guardStr(): Atom | STOP {
-    return this.error("unimplemented")
+  guardStr(): Atom | Stop {
+    return error("unimplemented")
   }
 
-  list(firstValue: Value): List | STOP {
+  list(firstValue: Value): List | Stop {
     const list = [ firstValue ]
         
     while (true) {
       const ws = this.ws(REQUIRED)  
       if (ws === END) return list
-      if (ws == STOP) return this.error("no whitespace between values")
+      if (isStop(ws)) return error("no whitespace between values", ws)
        
       const value = this.value()
       if (value === END) return list
-      if (value === STOP) return STOP
+      if (isStop(value)) return value
 
       list.push(value)
     }
