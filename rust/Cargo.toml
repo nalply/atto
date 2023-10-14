@@ -1,0 +1,8 @@
+[package]
+name = "atto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+indexmap = "2"
+peg = "0.8"
