@@ -1,0 +1,10 @@
+[package]
+name = "axlog"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+libc-strftime = "0.2"
+regex = "1"
+rust_lang_log = { package = "log", version = "0.4" }
+parking_lot = "0.12"
