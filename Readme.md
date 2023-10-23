@@ -5,10 +5,11 @@
 atto is an untyped and simple document/configuration language with atoms,
 lists and documents.
 
-An **atom** is a bare word, a string or a guarded string.
+An **atom** is a bare word, nil, a string or a guarded string.
 
 ```
 bare-words: ( name true 42 null )
+nil: #nil
 string: "Hello, world!"
 guarded-string: #"He said: "Hello!" and I nodded."#
 ```
@@ -48,6 +49,10 @@ string? Because the software knows that the data target is of type `Date`.
 
 This let me to the conclusion that a type system is mostly unneccessary. And
 atto was born.
+
+A special case is `#nil`. It is neccessary because an optional string can't
+use the bare word `nil`, because it is ambigous, it also could interpreted
+as the string `"nil"`. `#nil` cannot be a key.
 
 ## Status
 
