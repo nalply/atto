@@ -1,4 +1,3 @@
-#![feature(trait_alias)]
 mod lex;
 mod parser;
 mod value;

@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
-use regex::bytes::Regex;
+use axlog::*;
+use lazy_regex::lazy_regex;
+use lazy_regex::regex::bytes;
+use once_cell::sync::Lazy;
 use std::fmt;
-use std::sync::OnceLock;
 
 pub const INVALID: usize = 0; // second last in group ALL
 
@@ -14,168 +16,251 @@ pub const INIT: usize = 1;
 
 #[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct Token {
-  rule_id:  usize,
-  droup_id: usize,
-  data:     Vec<u8>,
-  line:     u32,
-  col:      u32,
-  index:    usize,
+  id:    usize,
+  data:  Vec<u8>,
+  line:  u32,
+  col:   u32,
+  index: usize,
 }
 
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
-pub struct ActionToken {
-  rule_id:  usize,
-  group_id: usize,
-  data:     Vec<u8>,
+type State = anymap::Map<dyn anymap::any::Any>;
+
+type ActionFn = fn(Token, &mut State) -> Option<Token>;
+
+#[derive(Clone, Eq, PartialEq)]
+struct ActionStruct {
+  f:    ActionFn,
+  name: &'static str,
 }
 
-// fn pointer because Fn traits include closures capturing non-Sync variables
-type ActionFn = fn(Token) -> Option<ActionToken>;
+#[derive(Clone, Eq, PartialEq)]
+pub struct Action(&'static ActionStruct);
 
-pub struct ActionStruct(ActionFn, &'static str);
-
-pub type Action = &'static ActionStruct;
-
-impl fmt::Debug for ActionStruct {
+impl fmt::Debug for Action {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "Action({})", self.1)
+    write!(f, "{}()", self.0.name)
   }
 }
 
-impl PartialEq for ActionStruct {
-  fn eq(&self, other: &Self) -> bool { self.0 == other.0 }
-}
+impl Default for Action {
+  fn default() -> Self {
+    fn identity(token: Token, _: &mut State) -> Option<Token> { Some(token) }
 
-macro_rules! once {
-    { $x:ident: $t:ty; } => {  static $x: OnceLock<$t> = OnceLock::new(); }
-}
-once! { IDENTITY: ActionStruct; }
-once! { RX_INVALID: Regex; }
-once! { RX_UNEXPECTED_END: Regex; }
+    static IDENTITY: ActionStruct = ActionStruct {
+      f:    identity,
+      name: "IDENTITY",
+    };
 
-pub fn identity() -> Action {
-  fn id(token: Token) -> Option<ActionToken> {
-    let Token {
-      rule_id,
-      group_id,
-      data,
-      ..
-    } = token;
-    Some(ActionToken {
-      rule_id,
-      group_id,
-      data,
-    })
+    Action(&IDENTITY)
   }
-
-  IDENTITY.get_or_init(|| ActionStruct(id as ActionFn, "identity"))
 }
 
-#[derive(Clone, Debug)]
+// Todo
+// impl<A: (Token, &mut State)> Fn<A> for Action {
+//   extern "rust-call" fn call(&self, args: A) -> Option<Token> {
+//     self.0.f(args)
+//   }
+// }
+
+#[derive(Clone)]
+pub struct LexRegex(&'static bytes::Regex);
+
+impl fmt::Debug for LexRegex {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "/{}/", self.0.as_str())
+  }
+}
+
+impl LexRegex {
+  pub fn new(rx: &'static bytes::Regex) -> LexRegex { LexRegex(rx) }
+}
+
+static RX_INVALID: Lazy<bytes::Regex> = lazy_regex!(r".+"B);
+
+static RX_UNEXPECTED_END: Lazy<bytes::Regex> = lazy_regex!(r"^[&&]"B);
+
+impl Default for LexRegex {
+  fn default() -> Self { LexRegex::new(&RX_INVALID) }
+}
+
+impl std::ops::Deref for LexRegex {
+  type Target = &'static bytes::Regex;
+
+  fn deref(&self) -> &&'static bytes::Regex { &self.0 }
+}
+
+impl PartialEq for LexRegex {
+  fn eq(&self, other: &Self) -> bool { self.0 as *const _ == other.0 }
+}
+
+impl Eq for LexRegex {}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Rule {
-  rx:     Regex,
+  id:     usize,
+  rx:     LexRegex,
   action: Action,
   push:   Option<usize>,
   pop:    bool,
 }
 
-// Regex does not implement PartialEq
-impl PartialEq for Rule {
-  fn eq(&self, other: &Self) -> bool {
-    self.rx.as_str() == other.rx.as_str()
-      && self.action == other.action
-      && self.push == other.push
-      && self.pop == other.pop
+impl Rule {
+  pub fn from_rx(id: usize, rx: &'static bytes::Regex) -> &'static Rule {
+    Box::leak(Box::new(Rule {
+      id,
+      rx: LexRegex(Box::leak(Box::new(rx))),
+      action: Action::default(),
+      push: None,
+      pop: false,
+    }))
+  }
+
+  pub fn unexpected_end() -> &'static Rule {
+    Rule::from_rx(UNEXPECTED_END, &RX_UNEXPECTED_END)
+  }
+
+  pub fn invalid() -> &'static Rule { Rule::from_rx(INVALID, &RX_INVALID) }
+}
+
+type RuleGroup = &'static [&'static Rule];
+
+type Rules = &'static [RuleGroup];
+
+#[macro_export]
+macro_rules! rule_group {
+  ( $( $rule:expr ),+ ) => {
+    Box::leak(Box::new([
+      $( $rule ),+
+    ]))
   }
 }
 
-pub fn rule_invalid() -> Rule {
-  let rx = RX_INVALID
-    .get_or_init(|| Regex::new("^.+").unwrap())
-    .clone();
-  let action = identity();
+pub fn start(
+  rules: Rules,
+  input: &[u8],
+  initial_state: State,
+) -> TokenIterator {
+  if rules.len() < 2 {
+    panic!("expect at least two groups");
+  }
+  if rules[0].len() < 2 {
+    panic!("expect at least two rules in first group");
+  }
+  for group in rules.iter().enumerate() {
+    if group.1.is_empty() {
+      panic!("expect at least one rule in group #{}", group.0);
+    }
+  }
 
-  Rule {
-    rx,
-    action,
-    push: None,
-    pop: false,
+  TokenIterator {
+    input,
+    lex: Lex {
+      state: initial_state,
+      index: 0,
+      group: INIT,
+    },
+    rules,
   }
 }
 
-pub fn rule_unexpected_end() -> Rule {
-  let rx = RX_UNEXPECTED_END
-    .get_or_init(|| Regex::new("[&&]").unwrap())
-    .clone();
-  let action = identity();
-
-  Rule {
-    rx,
-    action,
-    push: None,
-    pop: false,
-  }
+pub struct TokenIterator<'i> {
+  input: &'i [u8],
+  lex:   Lex,
+  rules: Rules,
 }
 
-#[derive(Clone, Default, Debug, PartialEq)]
-pub struct Lexer {
-  rule_groups:   Vec<Vec<Rule>>,
-  input:         Vec<u8>,
-  curr_group_id: usize,
-}
-
-impl Lexer {
-  fn new(rule_groups: Vec<Vec<Rule>>) -> Lexer {
-    if rule_groups.len() < 2 {
-      panic!("expect at least two groups");
-    }
-    if rule_groups[0].len() < 2 {
-      panic!("expect at least two rules in GROUP_ALL");
-    }
-    for group in rule_groups.iter() {
-      if group.is_empty() {
-        panic!("expect at least one rule in group");
-      }
-    }
-
-    let input = Vec::new();
-    let curr_group_id = INIT;
-    Lexer {
-      rule_groups,
-      input,
-      curr_group_id,
-    }
-  }
-}
-
-impl Iterator for Lexer {
+impl<'i> Iterator for TokenIterator<'i> {
   type Item = Token;
 
   fn next(&mut self) -> Option<Self::Item> {
-    if self.input.is_empty() {
-      if self.curr_group_id == INIT {
+    let group = self.lex.group;
+    let index = self.lex.index;
+    debug!("next(): group={group} index={index}");
+
+    if index == self.input.len() {
+      if group == INIT {
+        trace!("end of input");
         return None;
       } else {
+        trace!("invalid input");
         return Some(Token {
-          rule_id:  INVALID,
-          group_id: self.curr_group_id,
-          data:     vec![],
-          index:    0, // todo
-          line:     0,
-          col:      0,
+          id: INVALID,
+          data: vec![],
+          index,
+          line: 0,
+          col: 0,
         });
       }
     }
 
-    Some(Token {
-      rule_id:  2,
-      group_id: ALL,
-      data:     vec![],
-      index:    0, // todo
-      line:     0,
-      col:      0,
-    })
+    let group = self.rules[self.lex.group].iter();
+    for rule in group.chain(self.rules[ALL].iter()) {
+      let rx = &rule.rx;
+      trace!("rule={rule:?}");
+      if let Some(found) = rx.find_at(self.input, index) {
+        let id = rule.id;
+        let token = Token {
+          id,
+          data: found.as_bytes().to_owned(),
+          ..Token::default()
+        };
+
+        let action = rule.action.0.f;
+        let state = &mut self.lex.state;
+        trace!("rule matched");
+        if let Some(token) = action(token, state) {
+          self.lex.index += token.data.len(); // todo? index in action()
+          return Some(token);
+        }
+        trace!("rule rejected in action");
+      } else {
+        trace!("rule did not match");
+      }
+    }
+
+    unreachable!("fallback rule INVALID should have caught invalid input");
   }
+}
+
+#[derive(Debug)]
+pub struct Lex {
+  state: State,
+  index: usize,
+  group: usize,
+}
+
+use std::sync::atomic::{AtomicUsize, Ordering};
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+fn inc_counter() -> usize { COUNTER.fetch_add(1, Ordering::Relaxed) }
+
+#[macro_export]
+macro_rules! rules {
+  {
+    @ $rule:ident: $rx: expr
+  } => {
+    {
+      static RX: Lazy<bytes::Regex> = $rx;
+      Rule::from_rx(inc_counter(), &RX)
+    }
+  };
+
+  {
+    $rules:ident = { $(
+      $group:ident: {
+       $rule1:ident: $rx1:expr
+        $( , $rule:ident: $rx:expr )* $( , )?
+      }
+    )+ }
+  } => {
+    static $rules: Rules<_> = [
+      group![ Rule::invalid(), Rule::unexpected_end() ],
+      $( group![
+        rules!( @ $rule1: $rx1),
+        $( rules!( @ $rule: $rx ), )*
+      ], )*
+    ];
+  };
 }
 
 #[cfg(test)]
@@ -183,23 +268,50 @@ mod tests {
   use super::*;
 
   #[test]
-  fn simple() {
-    let mut lexer = Lexer::new(vec![
-      vec![rule_invalid(), rule_unexpected_end()],
-      vec![Rule {
-        rx:     Regex::new("[a-z]+").unwrap(),
-        action: identity(),
-        push:   None,
-        pop:    false,
-      }],
-    ]);
-    lexer.input = b"test".to_vec();
+  fn rules_macro1() {
+    rules! {
+      rules = {
+        init: {
+          alpha: lazy_regex!(r"[a-z]+"B),
+          excl: lazy_regex!(r"!"B),
+        }
+      }
+    }
 
-    println!("{:?}", identity());
+    assert_eq!(rules.len(), 2);
+  }
+
+  fn rules1() -> Rules<2> {
+    static RX_ALPHA: Lazy<bytes::Regex> = lazy_regex!(r"[a-z]+"B);
+    [
+      group!(Rule::invalid(), Rule::unexpected_end()),
+      group!(Rule::from_rx(2, &RX_ALPHA)),
+    ]
+  }
+
+  #[test]
+  fn simple() {
+    axlog::init("error");
+    let mut lexer = start(rules1(), b"text", State::new());
+    let token = lexer.next().unwrap();
+    assert_eq!(token.id, 2);
+    assert_eq!(token.data.as_slice(), b"text");
+    let token = lexer.next();
+    assert!(token.is_none());
+  }
+
+  #[test]
+  fn error1() {
+    axlog::init("error");
+    let mut lexer = start(rules1(), b"error!", State::new());
 
     let token = lexer.next().unwrap();
-    assert_eq!(token.rule_id, 2);
-    assert_eq!(token.group_id, ALL);
+    assert_eq!(token.id, 2);
+    assert_eq!(token.data.as_slice(), b"error");
+
+    let token = lexer.next().unwrap();
+    assert_eq!(token.id, INVALID);
+    assert_eq!(token.data.as_slice(), b"!");
 
     let token = lexer.next();
     assert!(token.is_none());

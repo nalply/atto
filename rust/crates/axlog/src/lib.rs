@@ -58,6 +58,8 @@ struct AxLog {
   // a special string to indicate that the log is from itself
 }
 
+const VAR_NAME: &str = "AXLOG";
+
 enum ItselfLevel {
   Warn,
   Info,
@@ -143,6 +145,9 @@ impl Log for AxLog {
 }
 
 fn init_with_string(spec: String) {
+  // todo log taken from env
+  // todo filter itself if level is info or higher
+
   if let Some(&logger) = LOGGER.get() {
     let old_spec = logger.spec();
     logger.set_spec(&spec);
@@ -153,12 +158,13 @@ fn init_with_string(spec: String) {
     );
     return;
   }
+  // todo think about this: should a second init() override the env var?
 
   // init() will go here only once
-  let spec = env::var("AXLOG").unwrap_or(spec);
+  let spec = env::var(VAR_NAME).unwrap_or(spec);
   let logger = Box::leak(Box::new(AxLog::init(&spec)));
   let result = LOGGER.set(logger);
-  if !result.is_ok() {
+  if result.is_err() {
     let msg = "OnceLock::set() didn't return Ok(()), retrying...";
     eprintln!("******* axlog FAIL-3: {msg} *******");
 
@@ -184,9 +190,14 @@ fn init_with_string(spec: String) {
   }
 
   let level_letter = max_level.to_string().chars().next().unwrap();
+  let env = if env::var(VAR_NAME).is_ok() {
+    format!("environment variable {VAR_NAME}")
+  } else {
+    "argument passed to axlog::init()".to_owned()
+  };
   logger.log_itself(
     ItselfLevel::Info,
-    format_args!("started; spec: {spec} max_level: {level_letter}"),
+    format_args!("started; spec: {spec} max_level: {level_letter} from {env}"),
   );
   set_max_level(max_level);
 }
