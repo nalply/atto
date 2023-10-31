@@ -1,3 +1,6 @@
+#![feature(fn_traits, trait_alias, unboxed_closures)]
+
+mod action;
 mod lex;
 mod parser;
 mod value;

@@ -1,10 +1,15 @@
 #![allow(dead_code)]
 
+/*
+use action::Action;
+use value::Token;
+
 use axlog::*;
 use lazy_regex::lazy_regex;
 use lazy_regex::regex::bytes;
 use once_cell::sync::Lazy;
 use std::fmt;
+
 
 pub const INVALID: usize = 0; // second last in group ALL
 
@@ -13,54 +18,6 @@ pub const UNEXPECTED_END: usize = 1; // last in group ALL
 pub const ALL: usize = 0;
 
 pub const INIT: usize = 1;
-
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
-pub struct Token {
-  id:    usize,
-  data:  Vec<u8>,
-  line:  u32,
-  col:   u32,
-  index: usize,
-}
-
-type State = anymap::Map<dyn anymap::any::Any>;
-
-type ActionFn = fn(Token, &mut State) -> Option<Token>;
-
-#[derive(Clone, Eq, PartialEq)]
-struct ActionStruct {
-  f:    ActionFn,
-  name: &'static str,
-}
-
-#[derive(Clone, Eq, PartialEq)]
-pub struct Action(&'static ActionStruct);
-
-impl fmt::Debug for Action {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}()", self.0.name)
-  }
-}
-
-impl Default for Action {
-  fn default() -> Self {
-    fn identity(token: Token, _: &mut State) -> Option<Token> { Some(token) }
-
-    static IDENTITY: ActionStruct = ActionStruct {
-      f:    identity,
-      name: "IDENTITY",
-    };
-
-    Action(&IDENTITY)
-  }
-}
-
-// Todo
-// impl<A: (Token, &mut State)> Fn<A> for Action {
-//   extern "rust-call" fn call(&self, args: A) -> Option<Token> {
-//     self.0.f(args)
-//   }
-// }
 
 #[derive(Clone)]
 pub struct LexRegex(&'static bytes::Regex);
@@ -187,8 +144,8 @@ impl<'i> Iterator for TokenIterator<'i> {
           id: INVALID,
           data: vec![],
           index,
-          line: 0,
-          col: 0,
+          // line: 0,
+          // col: 0,
         });
       }
     }
@@ -253,7 +210,8 @@ macro_rules! rules {
       }
     )+ }
   } => {
-    static $rules: Rules<_> = [
+    #[allow(non_upper_case_globals)]
+    static $rules: Rules = [
       group![ Rule::invalid(), Rule::unexpected_end() ],
       $( group![
         rules!( @ $rule1: $rx1),
@@ -281,11 +239,11 @@ mod tests {
     assert_eq!(rules.len(), 2);
   }
 
-  fn rules1() -> Rules<2> {
+  fn rules1() -> Rules {
     static RX_ALPHA: Lazy<bytes::Regex> = lazy_regex!(r"[a-z]+"B);
-    [
-      group!(Rule::invalid(), Rule::unexpected_end()),
-      group!(Rule::from_rx(2, &RX_ALPHA)),
+    &[
+      rule_group!(Rule::invalid(), Rule::unexpected_end()),
+      rule_group!(Rule::from_rx(3, &RX_ALPHA)),
     ]
   }
 
@@ -328,3 +286,5 @@ macro_rules! const_assert {
       } as usize] = [];
   };
 }
+
+*/
