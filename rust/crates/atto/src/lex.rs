@@ -1,173 +1,72 @@
 #![allow(dead_code)]
 
-/*
-use action::Action;
-use value::Token;
+use crate::rx::*;
+use crate::token::Token;
 
 use axlog::*;
-use lazy_regex::lazy_regex;
-use lazy_regex::regex::bytes;
-use once_cell::sync::Lazy;
 use std::fmt;
 
+pub trait StateBounds = fmt::Debug + 'static;
 
-pub const INVALID: usize = 0; // second last in group ALL
-
-pub const UNEXPECTED_END: usize = 1; // last in group ALL
-
-pub const ALL: usize = 0;
-
-pub const INIT: usize = 1;
-
-#[derive(Clone)]
-pub struct LexRegex(&'static bytes::Regex);
-
-impl fmt::Debug for LexRegex {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "/{}/", self.0.as_str())
-  }
+#[derive(Clone, Debug)]
+pub struct TokenIterator<'i, S: StateBounds> {
+  input:    &'i [u8],
+  index:    usize,
+  rules:    &'static Rules<S>,
+  group_id: usize,
+  state:    S,
 }
 
-impl LexRegex {
-  pub fn new(rx: &'static bytes::Regex) -> LexRegex { LexRegex(rx) }
-}
-
-static RX_INVALID: Lazy<bytes::Regex> = lazy_regex!(r".+"B);
-
-static RX_UNEXPECTED_END: Lazy<bytes::Regex> = lazy_regex!(r"^[&&]"B);
-
-impl Default for LexRegex {
-  fn default() -> Self { LexRegex::new(&RX_INVALID) }
-}
-
-impl std::ops::Deref for LexRegex {
-  type Target = &'static bytes::Regex;
-
-  fn deref(&self) -> &&'static bytes::Regex { &self.0 }
-}
-
-impl PartialEq for LexRegex {
-  fn eq(&self, other: &Self) -> bool { self.0 as *const _ == other.0 }
-}
-
-impl Eq for LexRegex {}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Rule {
-  id:     usize,
-  rx:     LexRegex,
-  action: Action,
-  push:   Option<usize>,
-  pop:    bool,
-}
-
-impl Rule {
-  pub fn from_rx(id: usize, rx: &'static bytes::Regex) -> &'static Rule {
-    Box::leak(Box::new(Rule {
-      id,
-      rx: LexRegex(Box::leak(Box::new(rx))),
-      action: Action::default(),
-      push: None,
-      pop: false,
-    }))
-  }
-
-  pub fn unexpected_end() -> &'static Rule {
-    Rule::from_rx(UNEXPECTED_END, &RX_UNEXPECTED_END)
-  }
-
-  pub fn invalid() -> &'static Rule { Rule::from_rx(INVALID, &RX_INVALID) }
-}
-
-type RuleGroup = &'static [&'static Rule];
-
-type Rules = &'static [RuleGroup];
-
-#[macro_export]
-macro_rules! rule_group {
-  ( $( $rule:expr ),+ ) => {
-    Box::leak(Box::new([
-      $( $rule ),+
-    ]))
-  }
-}
-
-pub fn start(
-  rules: Rules,
-  input: &[u8],
-  initial_state: State,
-) -> TokenIterator {
-  if rules.len() < 2 {
-    panic!("expect at least two groups");
-  }
-  if rules[0].len() < 2 {
-    panic!("expect at least two rules in first group");
-  }
-  for group in rules.iter().enumerate() {
-    if group.1.is_empty() {
-      panic!("expect at least one rule in group #{}", group.0);
+impl<'i, S: StateBounds> TokenIterator<'i, S> {
+  pub fn start(
+    input: &'i [u8],
+    rules: &'static Rules<S>,
+    state: S,
+  ) -> TokenIterator<'i, S> {
+    TokenIterator {
+      input,
+      index: 0,
+      rules,
+      group_id: 0,
+      state,
     }
   }
-
-  TokenIterator {
-    input,
-    lex: Lex {
-      state: initial_state,
-      index: 0,
-      group: INIT,
-    },
-    rules,
-  }
 }
 
-pub struct TokenIterator<'i> {
-  input: &'i [u8],
-  lex:   Lex,
-  rules: Rules,
-}
-
-impl<'i> Iterator for TokenIterator<'i> {
+impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
   type Item = Token;
 
   fn next(&mut self) -> Option<Self::Item> {
-    let group = self.lex.group;
-    let index = self.lex.index;
-    debug!("next(): group={group} index={index}");
+    {
+      let group_id = self.group_id;
+      let index = self.index;
+      debug!("next(): group_id={group_id} index={index}");
+    }
 
-    if index == self.input.len() {
-      if group == INIT {
+    if self.index == self.input.len() {
+      if self.group_id == 0 {
         trace!("end of input");
         return None;
       } else {
-        trace!("invalid input");
-        return Some(Token {
-          id: INVALID,
-          data: vec![],
-          index,
-          // line: 0,
-          // col: 0,
-        });
+        trace!("unexpected_end");
+        self.group_id = 0;
+        return Some(Token::default().with_id(unexpected_end().id()));
       }
     }
 
-    let group = self.rules[self.lex.group].iter();
-    for rule in group.chain(self.rules[ALL].iter()) {
+    for rule in self.rules.group(self.group_id) {
       let rx = &rule.rx;
-      trace!("rule={rule:?}");
-      if let Some(found) = rx.find_at(self.input, index) {
-        let id = rule.id;
-        let token = Token {
-          id,
-          data: found.as_bytes().to_owned(),
-          ..Token::default()
-        };
+      trace!("{rule:?}");
+      if let Some(found) = rx.find_at(self.input, self.index) {
+        let mut token = Token::new(rule.id(), found.as_bytes());
+        let mut state = &mut self.state;
+        trace!("rule matched: token {token}");
 
-        let action = rule.action.0.f;
-        let state = &mut self.lex.state;
-        trace!("rule matched");
-        if let Some(token) = action(token, state) {
-          self.lex.index += token.data.len(); // todo? index in action()
-          return Some(token);
+        if let Some(token) = (rule.action)(&mut token, &mut state) {
+          self.index += token.data.len(); // todo? index in action()
+          trace!("after action: token {token}");
+
+          return Some(token.clone()); // todo remove clone()
         }
         trace!("rule rejected in action");
       } else {
@@ -175,50 +74,16 @@ impl<'i> Iterator for TokenIterator<'i> {
       }
     }
 
-    unreachable!("fallback rule INVALID should have caught invalid input");
-  }
-}
+    let rule = catch_all();
+    trace!("catch all {rule:?}");
+    if let Some(found) = rule.rx.find_at(self.input, self.index) {
+      return Some(Token::new(rule.id(), found.as_bytes()));
 
-#[derive(Debug)]
-pub struct Lex {
-  state: State,
-  index: usize,
-  group: usize,
-}
-
-use std::sync::atomic::{AtomicUsize, Ordering};
-static COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-fn inc_counter() -> usize { COUNTER.fetch_add(1, Ordering::Relaxed) }
-
-#[macro_export]
-macro_rules! rules {
-  {
-    @ $rule:ident: $rx: expr
-  } => {
-    {
-      static RX: Lazy<bytes::Regex> = $rx;
-      Rule::from_rx(inc_counter(), &RX)
+      // no action because the catch all token uses identity
     }
-  };
 
-  {
-    $rules:ident = { $(
-      $group:ident: {
-       $rule1:ident: $rx1:expr
-        $( , $rule:ident: $rx:expr )* $( , )?
-      }
-    )+ }
-  } => {
-    #[allow(non_upper_case_globals)]
-    static $rules: Rules = [
-      group![ Rule::invalid(), Rule::unexpected_end() ],
-      $( group![
-        rules!( @ $rule1: $rx1),
-        $( rules!( @ $rule: $rx ), )*
-      ], )*
-    ];
-  };
+    unreachable!("catch all rule should have caught invalid input");
+  }
 }
 
 #[cfg(test)]
@@ -226,65 +91,24 @@ mod tests {
   use super::*;
 
   #[test]
-  fn rules_macro1() {
-    rules! {
-      rules = {
-        init: {
-          alpha: lazy_regex!(r"[a-z]+"B),
-          excl: lazy_regex!(r"!"B),
-        }
+  fn test_simple_lex() {
+    let rules = crate::rules! {
+      &'static Rules<()> from {
+        @all: [],
+        init: [
+          alpha: rule!{ group: 1, r"[a-z]+" }
+        ],
+        second: [
+          digit: rule!{ r"[0-9]+" },
+          dot: rule!{ r"\." },
+        ]
       }
-    }
+    };
 
-    assert_eq!(rules.len(), 2);
-  }
+    axlog::init("T");
+    let tokens: Vec<Token> =
+      TokenIterator::start(b"test.0", rules, ()).collect();
 
-  fn rules1() -> Rules {
-    static RX_ALPHA: Lazy<bytes::Regex> = lazy_regex!(r"[a-z]+"B);
-    &[
-      rule_group!(Rule::invalid(), Rule::unexpected_end()),
-      rule_group!(Rule::from_rx(3, &RX_ALPHA)),
-    ]
-  }
-
-  #[test]
-  fn simple() {
-    axlog::init("error");
-    let mut lexer = start(rules1(), b"text", State::new());
-    let token = lexer.next().unwrap();
-    assert_eq!(token.id, 2);
-    assert_eq!(token.data.as_slice(), b"text");
-    let token = lexer.next();
-    assert!(token.is_none());
-  }
-
-  #[test]
-  fn error1() {
-    axlog::init("error");
-    let mut lexer = start(rules1(), b"error!", State::new());
-
-    let token = lexer.next().unwrap();
-    assert_eq!(token.id, 2);
-    assert_eq!(token.data.as_slice(), b"error");
-
-    let token = lexer.next().unwrap();
-    assert_eq!(token.id, INVALID);
-    assert_eq!(token.data.as_slice(), b"!");
-
-    let token = lexer.next();
-    assert!(token.is_none());
+    println!("{tokens:?}");
   }
 }
-
-#[allow(unused_macros, clippy::items_after_test_module)]
-macro_rules! const_assert {
-  ($x:expr $(,)?) => {
-    const _: [();
-      0 - !{
-        const ASSERT: bool = $x;
-        ASSERT
-      } as usize] = [];
-  };
-}
-
-*/
