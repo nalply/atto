@@ -1,10 +1,8 @@
 use std::fmt;
 
-use crate::rx::RuleId;
-
 #[derive(Clone, Default, Debug, Eq, PartialEq)]
 pub struct Token {
-  pub id:   RuleId,
+  pub id:   usize,
   pub data: Vec<u8>,
   index:    u32,
   // line:   u32,
@@ -15,12 +13,12 @@ pub trait Update<T> = for<'t> FnOnce<(&'t mut T,)>;
 
 #[allow(dead_code)]
 impl Token {
-  pub fn new<V: Into<Vec<u8>>>(id: RuleId, data: V) -> Token {
+  pub fn new<V: Into<Vec<u8>>>(id: usize, data: V) -> Token {
     let data = data.into();
     Token { id, data, index: 0 }
   }
 
-  pub fn with_id(mut self, id: RuleId) -> Token {
+  pub fn with_id(mut self, id: usize) -> Token {
     self.id = id;
     self
   }
@@ -30,7 +28,7 @@ impl Token {
     self
   }
 
-  pub fn mut_id(mut self, f: impl Update<RuleId>) -> Token {
+  pub fn mut_id(mut self, f: impl Update<usize>) -> Token {
     f(&mut self.id);
     self
   }
@@ -70,7 +68,7 @@ mod tests {
   #[test]
   fn test_token_with_x() {
     let token = Token::default();
-    let token = token.with_id(RuleId::from_usize(1)).with_data(b"test");
+    let token = token.with_id(1).with_data(b"test");
     assert_eq!(token.data.as_slice(), b"test");
 
     assert_eq!(token.to_string(), "1`test`");
@@ -78,21 +76,19 @@ mod tests {
 
   #[test]
   fn test_token_mut_x() {
-    let token = Token::default()
-      .with_id(RuleId::from_usize(42))
-      .with_data(b"test");
-    let token = token.mut_id(|x: &mut RuleId| {
-      assert_eq!(x, &RuleId::from_usize(42));
-      *x = RuleId::from_usize(43)
+    let token = Token::default().with_id(1).with_data(b"test");
+    let token = token.mut_id(|x: &mut usize| {
+      assert_eq!(x, &1);
+      *x = 42
     });
-    assert_eq!(token.id, RuleId::from_usize(43));
+    assert_eq!(token.id, 42);
 
     let token = token.mut_data(|data: &mut Vec<u8>| {
       data.as_mut_slice().iter_mut().for_each(|b| *b += 1)
     });
     assert_eq!(token.data.as_slice(), b"uftu");
 
-    assert_eq!(token.to_string(), "h`uftu`");
+    assert_eq!(token.to_string(), "42`uftu`");
   }
 
   #[test]

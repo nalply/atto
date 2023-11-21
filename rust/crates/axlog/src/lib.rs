@@ -191,13 +191,13 @@ fn init_with_string(spec: String) {
 
   let level_letter = max_level.to_string().chars().next().unwrap();
   let env = if env::var(VAR_NAME).is_ok() {
-    format!("environment variable {VAR_NAME}")
+    VAR_NAME
   } else {
-    "argument passed to axlog::init()".to_owned()
+    "axlog::init()"
   };
   logger.log_itself(
     ItselfLevel::Info,
-    format_args!("started; spec: {spec} max_level: {level_letter} from {env}"),
+    format_args!("spec=`{spec}` max_level={level_letter} from {env}"),
   );
   set_max_level(max_level);
 }

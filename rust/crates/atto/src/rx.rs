@@ -8,75 +8,34 @@ use regex::{bytes, escape};
 use crate::action::{ActFn, ActRet, Action};
 use crate::token::Token;
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct RuleId(*const ());
-
-impl RuleId {
-  pub fn from_usize(id: usize) -> Self { RuleId((id * 8) as *const ()) }
-
-  fn radix(&self) -> String {
-    const LOOKUP: &str =
-      "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$+-.@_";
-    const BASE: u64 = LOOKUP.len() as u64;
-
-    let mut num = self.0 as u64 / 8;
-    if num == 0 {
-      return "0".to_string();
-    }
-
-    let mut result = String::new();
-
-    while num > 0 {
-      let digit = (num % BASE) as usize;
-      result.insert(0, LOOKUP.chars().nth(digit).unwrap());
-      num /= BASE;
-    }
-
-    result
-  }
-}
-
-impl fmt::Debug for RuleId {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{}", self.radix())
-  }
-}
-
-impl Default for RuleId {
-  #[allow(clippy::zero_ptr)]
-  fn default() -> Self { RuleId(0 as *const ()) }
-}
-
+/// Lexer rule with a byte regex for matching, an action for additional logic
+/// with state of generic type S and optionally a group to switch to.
 #[derive(Clone)]
 pub struct Rule<S> {
+  pub id:     usize,
   pub rx:     bytes::Regex,
   pub action: Action<S>,
   pub group:  Option<usize>,
 }
 
-impl<S> Rule<S> {
-  pub const fn id(&self) -> RuleId {
-    RuleId(self as *const Rule<_> as *const ())
-  }
-}
-
 impl<S> fmt::Debug for Rule<S> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let id = self.id;
     let rx = escape(&self.rx.to_string()[1..]);
     let action = &self.action.name;
     let action_type = std::any::type_name::<S>();
-    let group = if let Some(group_id) = self.group {
-      format!(" group={group_id}")
+    let group = if let Some(group) = self.group {
+      format!(" group={group}")
     } else {
       String::new()
     };
-    write!(f, "Rule(/{rx}/ {action}::<{action_type}>{group})")
+    write!(f, "Rule({id} /{rx}/ {action}::<{action_type}>{group})")
   }
 }
 
 impl<S> fmt::Display for Rule<S> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let id = self.id();
+    let id = self.id;
     let rx = escape(&self.rx.to_string()[1..]);
     let action = &self.action.name;
     let action_type = std::any::type_name::<S>();
@@ -90,24 +49,17 @@ impl<S> fmt::Display for Rule<S> {
 }
 
 impl<S> PartialEq for Rule<S> {
-  fn eq(&self, other: &Self) -> bool {
-    self.rx.as_str() == other.rx.as_str()
-      // && self.action == other.action // todo
-      && self.group == other.group
-  }
+  fn eq(&self, other: &Self) -> bool { self.id == other.id }
 }
 
 impl<S> Eq for Rule<S> {}
 
-type StaticStrs = &'static [&'static str];
 type Group<S> = &'static [&'static LazyLock<Rule<S>>];
 
 #[derive(Clone, Debug)]
 pub struct Rules<S: 'static> {
-  pub(crate) rule_names:  &'static [StaticStrs],
-  pub(crate) group_names: StaticStrs,
-  pub(crate) groups:      &'static [Group<S>],
-  pub(crate) all:         Group<S>,
+  pub groups: &'static [Group<S>],
+  pub all:    Group<S>,
 }
 
 pub trait GroupIterator<S: 'static> = Iterator<Item = &'static Rule<S>>;
@@ -129,110 +81,109 @@ impl<S> Rules<S> {
 
 #[macro_export]
 macro_rules! rules {
+  { @indices $_index:expr, } => {};
+
+  { @indices $index:expr, $head:ident, $( $tail:ident, )* } => {
+    #[allow(non_upper_case_globals)]
+    pub const $head: usize = $index;
+
+    $crate::rules! { @indices $index + 1, $( $tail, )* }
+  };
+
+  { @count $accum:expr, } => { $accum };
+
+  { @count $accum:expr, $head:ident, $( $tail:ident, )* } => {
+    $crate::rules! { @count $accum + 1, $( $tail, )* }
+  };
+
   {
-    &'static Rules<$ty:ty> from {
+    $( #[ $meta:meta ] )*
+    static $rules:ident: Rules<$ty:ty> = {
       @all: [
-        $( $all_rule_name:ident: rule! { $( $all_rule:tt )+ } $(,)? ),*
+        $( $all_rule_name:ident: Rule { $( $all_rule:tt )+ } $(,)? ),*
       ],
       $(
         $group_name:ident: [ $(
-          $rule_name:ident: rule!{ $( $rule:tt )+ } $(,)?
+          $rule_name:ident: Rule { $( $rule:tt )+ } $(,)?
         ),+ ]
       ),+
-    }
-  } => {{
-
-    use std::sync::LazyLock;
-    use $crate::rule;
-
-    #[allow(unused_variables)]
-    const GROUP_COUNT: usize = 0 $(
-      + { let $group_name = (); 1 }
-    )+;
-
-    #[allow(unused_variables)]
-    const ALL_COUNT: usize = 0 $(
-      + { let $all_rule_name = (); 1 }
-    )*;
-
-    static GROUP_NAMES: [&str; GROUP_COUNT] = [ $(
-      stringify!($group_name),
-    )+ ];
-
-    #[allow(unused_variables)]
-    static RULE_NAMES: [&[&str]; GROUP_COUNT] = [ $(
-      { let $group_name = (); &[ $(
-        stringify!($rule_name),
-      )+ ] },
-    )+ ];
-
-    #[allow(unused_variables)]
-    static GROUPS: [&[&LazyLock<Rule<$ty>>]; GROUP_COUNT] = [ $(
-      { let $group_name = (); &[ $( {
-        static RULE: LazyLock<Rule<$ty>> = rule!{ $( $rule )+ <$ty> };
-        &RULE
-      }, )+ ] },
-    )+ ];
-
-    static ALL: [&LazyLock<Rule<$ty>>; ALL_COUNT] = [ $( {
-      static ALL_RULE: LazyLock<Rule<$ty>> = rule!{ $( $all_rule )+ <$ty> };
-      &ALL_RULE
-    }, )* ];
-
-    static RULES: Rules<$ty> = Rules {
-      group_names: &GROUP_NAMES,
-      rule_names: &RULE_NAMES,
-      groups: &GROUPS,
-      all: &ALL,
     };
+  } => {
+    $crate::rules! { @indices 0, $( $group_name, )+ }
 
-    &RULES
-  }};
+    $crate::rules! {
+      @indices 0, $( $all_rule_name, )* $( $( $rule_name, )+ )+
+    }
+
+    $( #[ $meta ] )*
+    static $rules: $crate::rx::Rules<$ty> = {
+      use std::sync::LazyLock;
+      use $crate::rule;
+      use $crate::rx;
+
+      const GROUP_COUNT: usize =
+        $crate::rules! { @count 0, $( $group_name, )+ }
+      ;
+
+      const ALL_COUNT: usize =
+        $crate::rules! { @count 0, $( $all_rule_name, )* }
+      ;
+
+      static GROUPS: [&[&LazyLock<rx::Rule<$ty>>]; GROUP_COUNT] = [ $(
+        { let _ = stringify!($group_name); &[ $( {
+          static RULE: LazyLock<rx::Rule<$ty>> = rule!{
+            $rule_name => $( $rule )+
+          };
+          &RULE
+        }, )+ ] },
+      )+ ];
+
+      static ALL: [&LazyLock<rx::Rule<$ty>>; ALL_COUNT] = [ $( {
+        static ALL_RULE: LazyLock<rx::Rule<$ty>> = rule!{
+        $all_rule_name => $( $all_rule )+ };
+        &ALL_RULE
+      }, )* ];
+
+      rx::Rules {
+        groups: &GROUPS,
+        all: &ALL,
+      }
+    };
+  };
 }
 
 #[macro_export]
 macro_rules! rule {
-  {
-    action $name:expr => $action:expr; $group:expr, $rx:literal <$ty:ty>
-  } => {
-    std::sync::LazyLock::new(|| {
-      use regex::bytes::Regex;
-      use $crate::action::Action;
-
-      let rule: Rule<$ty> = Rule {
-        rx:     Regex::new(concat!('^', $rx)).unwrap(),
-        action: Action { action_fn: $action, name: $name },
-        group:  $group,
-      };
-      rule
+  { $id:expr => action $name:expr => $action:expr; $group:expr, $rx:literal } => {
+    std::sync::LazyLock::new(|| $crate::rx::Rule {
+      id:     $id,
+      rx:     ::regex::bytes::Regex::new(concat!('^', $rx)).unwrap(),
+      action: $crate::action::Action { action_fn: $action, name: $name },
+      group:  $group,
     })
   };
 
-  { id $group:expr, $rx:literal <$ty:ty> } => {
-    rule!{ action "id" => |token, _| Some(token); $group, $rx<$ty> }
+  { $id:expr => group: $group:expr, $rx:literal } => {
+    rule!{ $id => action "id" => |token, _| Some(token); Some($group), $rx }
   };
 
-  { group: $group:expr, $rx:literal <$ty:ty> } => {
-    rule!{ id Some($group), $rx<$ty> }
+  { $id:expr => action: $action:expr, $rx:literal } => {
+    rule!{ $id => action stringify!($action) => $action; None, $rx }
   };
 
-  { action: $action:expr, $rx:literal <$ty:ty> } => {
-    rule!{ action stringify!($action) => $action; None, $rx<$ty> }
+  { $id:expr => action: $action:expr, group: $group:expr, $rx:literal } => {
+    rule!{ $id => action stringify!($action) => $action; Some($group), $rx }
   };
 
-  { action: $action:expr, group: $group:expr, $rx:literal <$ty:ty> } => {
-    rule!{ action stringify!($action) => $action; Some($group), $rx<$ty> }
-  };
-
-  { $rx:literal <$ty:ty> } => {
-    rule!{ id None, $rx<$ty> }
+  { $id:expr => $rx:literal } => {
+    rule!{ $id => action "id" => |token, _| Some(token); None, $rx }
   };
 
 }
 
-static CATCH_ALL: LazyLock<Rule<()>> = rule! { ".+"<()> };
+static CATCH_ALL: LazyLock<Rule<()>> = rule! { usize::MAX - 1 => ".+" };
 
-static UNEXPECTED_END: LazyLock<Rule<()>> = rule! { "[&&]"<()> };
+static UNEXPECTED_END: LazyLock<Rule<()>> = rule! { usize::MAX => "[&&]" };
 
 #[cfg(test)]
 mod test {
@@ -240,58 +191,57 @@ mod test {
   use std::ops::Deref;
 
   #[test]
-  fn test_print_ruleid() {
-    assert_eq!(format!("{:?}", RuleId::default()), "0");
-    assert_eq!(format!("{:?}", RuleId::from_usize(42)), "g");
-  }
-
-  #[test]
   fn test_rule_macro() {
-    let rule1 = &*rule! { "[a-z]"<()> };
-    assert_eq!(format!("{rule1:?}"), r"Rule(/\[a\-z\]/ id::<()>)");
+    #![allow(clippy::explicit_auto_deref)]
+
+    let rule1: &Rule<()> = &*rule! { 1 => "[a-z]" };
+    assert_eq!(format!("{rule1:?}"), r"Rule(1 /\[a\-z\]/ id::<()>)");
 
     fn f<'t>(_: &'t mut Token, _: &'_ mut u8) -> ActRet<'t> { None }
-    let rule2 = &*rule! { action: f, "rxtest"<u8> };
-    assert_eq!(format!("{rule2:?}"), "Rule(/rxtest/ f::<u8>)");
+    let rule2 = &*rule! { 2 => action: f, "rxtest" };
+    assert_eq!(format!("{rule2:?}"), "Rule(2 /rxtest/ f::<u8>)");
 
     const F3: ActFn<u8> = f;
-    let rule3 = &*rule! { action: F3, group: 7, "rxtest43"<u8> };
-    assert_eq!(format!("{rule3:?}"), "Rule(/rxtest43/ F3::<u8> group=7)");
+    let rule3 = &*rule! { 3 => action: F3, group: 7, "rxtest43" };
+    assert_eq!(format!("{rule3:?}"), "Rule(3 /rxtest43/ F3::<u8> group=7)");
 
-    let rule4 = &*rule! { group: 8, "rxtest44"<()> };
-    assert_eq!(format!("{rule4:?}"), "Rule(/rxtest44/ id::<()> group=8)");
+    let rule4: &Rule<()> = &*rule! { 4 => group: 8, "rxtest44" };
+    assert_eq!(format!("{rule4:?}"), "Rule(4 /rxtest44/ id::<()> group=8)");
   }
 
   #[test]
   fn test_rules() {
-    let rules = rules! {
-      &'static Rules<()> from {
-        @all: [ ws: rule!{ r"[ \t]" } ],
+    rules! {
+      #[allow(non_upper_case_globals)]
+      static rules: Rules<()> = {
+        @all: [ ws: Rule{ r"[ \t]" } ],
         init: [
-          alpha: rule!{ "[a-z]" }
+          alpha: Rule{ "[a-z]" }
         ],
         second: [
-          digit: rule!{ "[0-9]" },
-          dot: rule!{ "." },
+          digit: Rule{ "[0-9]" },
+          dot: Rule{ "." },
         ]
-      }
-    };
+      };
+    }
 
-    assert_eq!(rules.group_names.join(","), "init,second");
-    assert_eq!(
-      rules
-        .rule_names
-        .iter()
-        .map(|names| names.join(","))
-        .collect::<Vec<_>>()
-        .join(";"),
-      "alpha;digit,dot"
-    );
+    assert_eq!(init, 0);
+    assert_eq!(second, 1);
+
+    assert_eq!(ws, 0);
+    assert_eq!(rules.all[0].id, ws);
+    assert_eq!(alpha, 1);
+    assert_eq!(rules.groups[init][0].id, alpha);
+    assert_eq!(digit, 2);
+    assert_eq!(rules.groups[second][0].id, digit);
+    assert_eq!(dot, 3);
+    assert_eq!(rules.groups[second][1].id, dot);
+
     assert_eq!(
       rules
         .groups
         .iter()
-        .map(|rules| rules
+        .map(|rs| rs
           .iter()
           .map(|rule| rule.rx.to_string())
           .collect::<Vec<_>>()
@@ -311,7 +261,7 @@ mod test {
     );
     assert_eq!(
       rules
-        .group(0)
+        .group(init)
         .map(|rule| rule.rx.to_string())
         .collect::<Vec<_>>()
         .join(","),

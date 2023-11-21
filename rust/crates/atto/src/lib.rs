@@ -6,12 +6,12 @@
   unboxed_closures
 )]
 
-mod action;
-mod lex;
-mod parser;
-mod rx;
-mod token;
-mod value;
+pub mod action;
+pub mod lex;
+pub mod parser;
+pub mod rx;
+pub mod token;
+pub mod value;
 
 pub use value::Value;
 

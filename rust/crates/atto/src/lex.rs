@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::rx::*;
+use crate::rx::{catch_all, unexpected_end, Rules};
 use crate::token::Token;
 
 use axlog::*;
@@ -50,7 +50,7 @@ impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
       } else {
         trace!("unexpected_end");
         self.group_id = 0;
-        return Some(Token::default().with_id(unexpected_end().id()));
+        return Some(Token::default().with_id(unexpected_end().id));
       }
     }
 
@@ -58,7 +58,7 @@ impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
       let rx = &rule.rx;
       trace!("{rule:?}");
       if let Some(found) = rx.find_at(self.input, self.index) {
-        let mut token = Token::new(rule.id(), found.as_bytes());
+        let mut token = Token::new(rule.id, found.as_bytes());
         let mut state = &mut self.state;
         trace!("rule matched: token {token}");
 
@@ -77,7 +77,7 @@ impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
     let rule = catch_all();
     trace!("catch all {rule:?}");
     if let Some(found) = rule.rx.find_at(self.input, self.index) {
-      return Some(Token::new(rule.id(), found.as_bytes()));
+      return Some(Token::new(rule.id, found.as_bytes()));
 
       // no action because the catch all token uses identity
     }
@@ -92,22 +92,23 @@ mod tests {
 
   #[test]
   fn test_simple_lex() {
-    let rules = crate::rules! {
-      &'static Rules<()> from {
+    crate::rules! {
+      #[allow(non_upper_case_globals)]
+      static rules: Rules<()> = {
         @all: [],
         init: [
-          alpha: rule!{ group: 1, r"[a-z]+" }
+          alpha: Rule{ group: 1, r"[a-z]+" }
         ],
         second: [
-          digit: rule!{ r"[0-9]+" },
-          dot: rule!{ r"\." },
+          digit: Rule{ r"[0-9]+" },
+          dot: Rule{ r"\." },
         ]
-      }
+      };
     };
 
     axlog::init("T");
     let tokens: Vec<Token> =
-      TokenIterator::start(b"test.0", rules, ()).collect();
+      TokenIterator::start(b"test.0", &rules, ()).collect();
 
     println!("{tokens:?}");
   }

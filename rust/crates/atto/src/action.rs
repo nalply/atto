@@ -13,18 +13,6 @@ pub struct Action<S = ()> {
   pub name:      &'static str,
 }
 
-// impl<S> Action<S> {
-//   pub const fn identity() { |token, _| Some(token) }
-
-//   #[allow(dead_code)]
-//   pub const fn const_default() -> Self {
-//     Action {
-//       action_fn: |token, _| Some(token),
-//       name:      "default",
-//     }
-//   }
-// }
-
 impl<S> fmt::Debug for Action<S> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}()", self.name)
@@ -54,7 +42,6 @@ impl<'t, 's, S> FnOnce<Args<'t, 's, S>> for Action<S> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::rx::RuleId;
 
   // The tests all run action() twice to make sure borrowing works
 
@@ -99,7 +86,7 @@ mod tests {
   fn test_mut_token() {
     let mut id = 1usize;
     fn action_fn<'t>(token: &'t mut Token, state: &'_ mut usize) -> ActRet<'t> {
-      token.id = RuleId::from_usize(*state);
+      token.id = *state;
       *state += 42;
       Some(token)
     }
@@ -109,14 +96,8 @@ mod tests {
     };
 
     let mut token = Token::default();
-    assert_eq!(
-      RuleId::from_usize(1),
-      action(&mut token, &mut id).unwrap().id
-    );
-    assert_eq!(
-      RuleId::from_usize(43),
-      action(&mut token, &mut id).unwrap().id
-    );
+    assert_eq!(1, action(&mut token, &mut id).unwrap().id);
+    assert_eq!(43, action(&mut token, &mut id).unwrap().id);
   }
 
   #[test]
@@ -126,7 +107,7 @@ mod tests {
       // 1. type inferred from action() calls below
       // 2. closure syntax without capture gives a fn pointera
       action_fn: |token, state| {
-        token.id = RuleId::from_usize(*state);
+        token.id = *state;
         *state *= 2;
         Some(token)
       },
@@ -134,13 +115,7 @@ mod tests {
     };
 
     let mut token = Token::default();
-    assert_eq!(
-      RuleId::from_usize(42),
-      action(&mut token, &mut id).unwrap().id
-    );
-    assert_eq!(
-      RuleId::from_usize(84),
-      action(&mut token, &mut id).unwrap().id
-    );
+    assert_eq!(42, action(&mut token, &mut id).unwrap().id);
+    assert_eq!(84, action(&mut token, &mut id).unwrap().id);
   }
 }
