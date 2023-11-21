@@ -60,26 +60,28 @@ impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
       if let Some(found) = rx.find_at(self.input, self.index) {
         let mut token = Token::new(rule.id, found.as_bytes());
         let mut state = &mut self.state;
-        trace!("rule matched: token {token}");
+        trace!("match  {token:#}");
 
         if let Some(token) = (rule.action)(&mut token, &mut state) {
           self.index += token.data.len(); // todo? index in action()
-          trace!("after action: token {token}");
+          trace!("return {token:#} index {}", self.index);
 
           return Some(token.clone()); // todo remove clone()
         }
-        trace!("rule rejected in action");
+        trace!("rejected in action");
       } else {
-        trace!("rule did not match");
+        trace!("no match");
       }
     }
 
     let rule = catch_all();
-    trace!("catch all {rule:?}");
+    let input = String::from_utf8_lossy(self.input);
+    trace!("catch-all {rule:?} input {input} @{}", self.index);
     if let Some(found) = rule.rx.find_at(self.input, self.index) {
-      return Some(Token::new(rule.id, found.as_bytes()));
-
-      // no action because the catch all token uses identity
+      let token = Token::new(rule.id, found.as_bytes());
+      self.index += token.data.len();
+      trace!("return catch-all {token:#} index{}", self.index);
+      return Some(token);
     }
 
     unreachable!("catch all rule should have caught invalid input");

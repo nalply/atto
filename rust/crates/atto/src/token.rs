@@ -56,8 +56,13 @@ impl fmt::Display for Token {
       .chars()
       .map(|c| if c.is_control() { '\u{fffd}' } else { c })
       .collect();
+    let id = self.id;
 
-    write!(f, "{:?}`{s}`", self.id)
+    if f.alternate() {
+      write!(f, "Token({id:?} {s})")
+    } else {
+      write!(f, "{id:?}`{s}`")
+    }
   }
 }
 

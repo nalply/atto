@@ -20,23 +20,20 @@ pub struct Rule<S> {
 
 impl<S> fmt::Debug for Rule<S> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let id = self.id;
-    let rx = escape(&self.rx.to_string()[1..]);
-    let action = &self.action.name;
-    let action_type = std::any::type_name::<S>();
-    let group = if let Some(group) = self.group {
-      format!(" group={group}")
-    } else {
-      String::new()
-    };
-    write!(f, "Rule({id} /{rx}/ {action}::<{action_type}>{group})")
+    let s = self.to_string();
+    write!(f, "{s}")
   }
 }
 
 impl<S> fmt::Display for Rule<S> {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let id = self.id;
-    let rx = escape(&self.rx.to_string()[1..]);
+    let id = &self.id.to_string();
+    let id = match self.id {
+      usize::MAX => "MAX",
+      _ if self.id == usize::MAX - 1 => "MAX-1",
+      _ => id,
+    };
+    let rx = &self.rx.to_string();
     let action = &self.action.name;
     let action_type = std::any::type_name::<S>();
     let group = if let Some(group_id) = self.group {
@@ -44,7 +41,7 @@ impl<S> fmt::Display for Rule<S> {
     } else {
       String::new()
     };
-    write!(f, "Rule({id:?} /{rx}/ {action}::<{action_type}>{group})")
+    write!(f, "Rule({id} /{rx}/ {action}::<{action_type}>{group})")
   }
 }
 
@@ -157,7 +154,7 @@ macro_rules! rule {
   { $id:expr => action $name:expr => $action:expr; $group:expr, $rx:literal } => {
     std::sync::LazyLock::new(|| $crate::rx::Rule {
       id:     $id,
-      rx:     ::regex::bytes::Regex::new(concat!('^', $rx)).unwrap(),
+      rx:     ::regex::bytes::Regex::new($rx).unwrap(),
       action: $crate::action::Action { action_fn: $action, name: $name },
       group:  $group,
     })
@@ -195,7 +192,7 @@ mod test {
     #![allow(clippy::explicit_auto_deref)]
 
     let rule1: &Rule<()> = &*rule! { 1 => "[a-z]" };
-    assert_eq!(format!("{rule1:?}"), r"Rule(1 /\[a\-z\]/ id::<()>)");
+    assert_eq!(format!("{rule1:?}"), r"Rule(1 /[a-z]/ id::<()>)");
 
     fn f<'t>(_: &'t mut Token, _: &'_ mut u8) -> ActRet<'t> { None }
     let rule2 = &*rule! { 2 => action: f, "rxtest" };
@@ -248,7 +245,7 @@ mod test {
           .join(","))
         .collect::<Vec<_>>()
         .join(";"),
-      "^[a-z];^[0-9],^."
+      "[a-z];[0-9],."
     );
     assert_eq!(
       rules
@@ -257,7 +254,7 @@ mod test {
         .map(|rule| rule.rx.to_string())
         .collect::<Vec<_>>()
         .join(","),
-      r"^[ \t]"
+      r"[ \t]"
     );
     assert_eq!(
       rules
@@ -265,7 +262,7 @@ mod test {
         .map(|rule| rule.rx.to_string())
         .collect::<Vec<_>>()
         .join(","),
-      r"^[a-z],^[ \t]"
+      r"[a-z],[ \t]"
     );
   }
 }
