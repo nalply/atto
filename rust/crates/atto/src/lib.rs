@@ -1,16 +1,4 @@
-#![feature(
-  fn_traits,
-  lazy_cell,
-  trait_alias,
-  type_name_of_val,
-  unboxed_closures
-)]
-
-pub mod action;
-pub mod lex;
 pub mod parser;
-pub mod rx;
-pub mod token;
 pub mod value;
 
 pub use value::Value;

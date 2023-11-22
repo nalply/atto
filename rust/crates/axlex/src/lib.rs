@@ -1,6 +1,16 @@
-#![allow(dead_code)]
+#![feature(
+  fn_traits,
+  lazy_cell,
+  trait_alias,
+  type_name_of_val,
+  unboxed_closures
+)]
+#![forbid(unsafe_code)]
 
-use crate::rx::{catch_all, unexpected_end, Rules};
+pub mod action;
+pub mod rules;
+pub mod token;
+
 use crate::token::Token;
 
 use axlog::*;
@@ -9,31 +19,35 @@ use std::fmt;
 pub trait StateBounds = fmt::Debug + 'static;
 
 #[derive(Clone, Debug)]
-pub struct TokenIterator<'i, S: StateBounds> {
+pub struct TokenIterator<'i, S: StateBounds, const G: usize, const R: usize> {
   input:    &'i [u8],
   index:    usize,
-  rules:    &'static Rules<S>,
-  group_id: usize,
+  rules:    rules::Rules<S, G, R>,
+  group_id: u16,
   state:    S,
 }
 
-impl<'i, S: StateBounds> TokenIterator<'i, S> {
+impl<'i, S: StateBounds, const G: usize, const R: usize>
+  TokenIterator<'i, S, R, G>
+{
   pub fn start(
     input: &'i [u8],
-    rules: &'static Rules<S>,
+    rules: rules::Rules<S, G, R>,
     state: S,
-  ) -> TokenIterator<'i, S> {
+  ) -> TokenIterator<'i, S, G, R> {
     TokenIterator {
       input,
       index: 0,
       rules,
-      group_id: 0,
+      group_id: 1,
       state,
     }
   }
 }
 
-impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
+impl<'i, S: StateBounds, const G: usize, const R: usize> Iterator
+  for TokenIterator<'i, S, G, R>
+{
   type Item = Token;
 
   fn next(&mut self) -> Option<Self::Item> {
@@ -44,13 +58,13 @@ impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
     }
 
     if self.index == self.input.len() {
-      if self.group_id == 0 {
+      if self.group_id == 1 {
         trace!("end of input");
         return None;
       } else {
         trace!("unexpected_end");
-        self.group_id = 0;
-        return Some(Token::default().with_id(unexpected_end().id));
+        self.group_id = 1;
+        return Some(Token::default().with_id(self.rules.unexpected_end().id));
       }
     }
 
@@ -74,13 +88,13 @@ impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
       }
     }
 
-    let rule = catch_all();
+    let rule = self.rules.catch_all();
     let input = String::from_utf8_lossy(self.input);
     trace!("catch-all {rule:?} input {input} @{}", self.index);
     if let Some(found) = rule.rx.find_at(self.input, self.index) {
       let token = Token::new(rule.id, found.as_bytes());
       self.index += token.data.len();
-      trace!("return catch-all {token:#} index{}", self.index);
+      trace!("return catch-all {token:#} index {}", self.index);
       return Some(token);
     }
 
@@ -93,25 +107,24 @@ mod tests {
   use super::*;
 
   #[test]
-  fn test_simple_lex() {
-    crate::rules! {
-      #[allow(non_upper_case_globals)]
-      static rules: Rules<()> = {
-        @all: [],
-        init: [
-          alpha: Rule{ group: 1, r"[a-z]+" }
+  fn test_simple_grammar() {
+    crate::grammar! {
+      pub rules<()> {
+        ALL: [],
+        INIT: [
+          ALPHA: Rule{ group: 1, r"[a-z]+" }
         ],
-        second: [
-          digit: Rule{ r"[0-9]+" },
-          dot: Rule{ r"\." },
+        SECOND: [
+          DIGIT: Rule{ r"[0-9]+" },
+          DOT: Rule{ r"\." },
         ]
       };
     };
 
     axlog::init("T");
     let tokens: Vec<Token> =
-      TokenIterator::start(b"test.0", &rules, ()).collect();
+      TokenIterator::start(b"test.0", rules::create(), ()).collect();
 
-    println!("{tokens:?}");
+    debug!("tokens: {tokens:?}");
   }
 }

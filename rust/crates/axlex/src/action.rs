@@ -84,8 +84,8 @@ mod tests {
 
   #[test]
   fn test_mut_token() {
-    let mut id = 1usize;
-    fn action_fn<'t>(token: &'t mut Token, state: &'_ mut usize) -> ActRet<'t> {
+    let mut id = 1u16;
+    fn action_fn<'t>(token: &'t mut Token, state: &'_ mut u16) -> ActRet<'t> {
       token.id = *state;
       *state += 42;
       Some(token)
@@ -102,7 +102,7 @@ mod tests {
 
   #[test]
   fn test_with_closure_syntax() {
-    let mut id = 42usize;
+    let mut id = 42u16;
     let action = Action {
       // 1. type inferred from action() calls below
       // 2. closure syntax without capture gives a fn pointera

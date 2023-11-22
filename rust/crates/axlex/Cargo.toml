@@ -1,9 +1,9 @@
 [package]
-name = "atto"
-version = "0.1.2"
+name = "axlex"
+version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axlex = { path = "../axlex" }
 axlog = { path = "../axlog" }
 indexmap = "2"
+regex = "1"

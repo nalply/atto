@@ -1,24 +1,22 @@
 use std::fmt;
 
-#[derive(Clone, Default, Debug, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct Token {
-  pub id:   usize,
+  pub id:   u16,
   pub data: Vec<u8>,
   index:    u32,
-  // line:   u32,
-  // col: usize,
 }
 
 pub trait Update<T> = for<'t> FnOnce<(&'t mut T,)>;
 
 #[allow(dead_code)]
 impl Token {
-  pub fn new<V: Into<Vec<u8>>>(id: usize, data: V) -> Token {
+  pub fn new<V: Into<Vec<u8>>>(id: u16, data: V) -> Token {
     let data = data.into();
     Token { id, data, index: 0 }
   }
 
-  pub fn with_id(mut self, id: usize) -> Token {
+  pub fn with_id(mut self, id: u16) -> Token {
     self.id = id;
     self
   }
@@ -28,7 +26,7 @@ impl Token {
     self
   }
 
-  pub fn mut_id(mut self, f: impl Update<usize>) -> Token {
+  pub fn mut_id(mut self, f: impl Update<u16>) -> Token {
     f(&mut self.id);
     self
   }
@@ -36,6 +34,12 @@ impl Token {
   pub fn mut_data(mut self, f: impl Update<Vec<u8>>) -> Token {
     f(&mut self.data);
     self
+  }
+}
+
+impl fmt::Debug for Token {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fmt::Display::fmt(self, f)
   }
 }
 
@@ -56,12 +60,12 @@ impl fmt::Display for Token {
       .chars()
       .map(|c| if c.is_control() { '\u{fffd}' } else { c })
       .collect();
-    let id = self.id;
+    let id = self.id as i64;
 
     if f.alternate() {
       write!(f, "Token({id:?} {s})")
     } else {
-      write!(f, "{id:?}`{s}`")
+      write!(f, "{id}`{s}`")
     }
   }
 }
@@ -82,7 +86,7 @@ mod tests {
   #[test]
   fn test_token_mut_x() {
     let token = Token::default().with_id(1).with_data(b"test");
-    let token = token.mut_id(|x: &mut usize| {
+    let token = token.mut_id(|x: &mut u16| {
       assert_eq!(x, &1);
       *x = 42
     });
