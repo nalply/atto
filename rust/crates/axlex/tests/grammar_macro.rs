@@ -1,13 +1,13 @@
-#![feature(lazy_cell)]
+#![feature(lazy_cell, const_type_name, const_option)]
 
 use axlex::grammar;
 
 pub fn main() {
   grammar! {
-    pub grammar<()> {
+    example<()> {
       ALL: [],
-      INIT: [ ALPHA: Rule{ "[a-z]+" }, DOT: Rule { r"\."} ],
-      SECOND: [ NUM: Rule{ "[0-9]+" } ]
+      init: [ alpha("[a-z]+"), dot(r"\.") ],
+      second: [ num("[0-9]+") ]
     };
   }
 }

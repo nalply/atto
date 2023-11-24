@@ -1,56 +1,52 @@
 #![feature(
+  const_option,
+  const_type_name,
   fn_traits,
   lazy_cell,
   trait_alias,
+  type_alias_impl_trait,
   type_name_of_val,
   unboxed_closures
 )]
 #![forbid(unsafe_code)]
 
-pub mod action;
-pub mod rules;
+pub mod rule;
 pub mod token;
 
 use crate::token::Token;
 
+#[allow(unused_imports)]
 use axlog::*;
 use std::fmt;
 
 pub trait StateBounds = fmt::Debug + 'static;
 
 #[derive(Clone, Debug)]
-pub struct TokenIterator<'i, S: StateBounds, const G: usize, const R: usize> {
+pub struct TokenIterator<'i, S: StateBounds> {
   input:    &'i [u8],
   index:    usize,
-  rules:    rules::Rules<S, G, R>,
+  grammar:  &'static rule::Grammar<S>,
   group_id: u16,
   state:    S,
 }
 
-impl<'i, S: StateBounds, const G: usize, const R: usize>
-  TokenIterator<'i, S, R, G>
-{
+impl<'i, S: StateBounds> TokenIterator<'i, S> {
   pub fn start(
     input: &'i [u8],
-    rules: rules::Rules<S, G, R>,
+    grammar: &'static rule::Grammar<S>,
     state: S,
-  ) -> TokenIterator<'i, S, G, R> {
-    TokenIterator {
-      input,
-      index: 0,
-      rules,
-      group_id: 1,
-      state,
-    }
+  ) -> TokenIterator<'i, S> {
+    TokenIterator { input, index: 0, grammar, group_id: 1, state }
   }
 }
 
-impl<'i, S: StateBounds, const G: usize, const R: usize> Iterator
-  for TokenIterator<'i, S, G, R>
-{
+impl<'i, S: StateBounds> Iterator for TokenIterator<'i, S> {
   type Item = Token;
 
   fn next(&mut self) -> Option<Self::Item> {
+    return None;
+
+    /*
     {
       let group_id = self.group_id;
       let index = self.index;
@@ -63,8 +59,12 @@ impl<'i, S: StateBounds, const G: usize, const R: usize> Iterator
         return None;
       } else {
         trace!("unexpected_end");
-        self.group_id = 1;
-        return Some(Token::default().with_id(self.rules.unexpected_end().id));
+        self.group_id = 1; // this ends the iterator on the next iteration
+        return Some(Token {
+          index: self.index,
+          id:    self.rules.unexpected_end().id,
+          data:  vec![],
+        });
       }
     }
 
@@ -72,13 +72,18 @@ impl<'i, S: StateBounds, const G: usize, const R: usize> Iterator
       let rx = &rule.rx;
       trace!("{rule:?}");
       if let Some(found) = rx.find_at(self.input, self.index) {
-        let mut token = Token::new(rule.id, found.as_bytes());
+        let mut token = Token {
+          id:    rule.id,
+          index: self.index,
+          data:  found.as_bytes().to_vec(),
+        };
         let mut state = &mut self.state;
-        trace!("match  {token:#}");
+        trace!("match  {token}");
 
         if let Some(token) = (rule.action)(&mut token, &mut state) {
-          self.index += token.data.len(); // todo? index in action()
-          trace!("return {token:#} index {}", self.index);
+          // todo self.index += state.token_len().unwrap_or(token.data.len())
+          self.index += token.data.len();
+          trace!("return {token} index {}", self.index);
 
           return Some(token.clone()); // todo remove clone()
         }
@@ -88,28 +93,39 @@ impl<'i, S: StateBounds, const G: usize, const R: usize> Iterator
       }
     }
 
+    // todo add catch_all to all groups
     let rule = self.rules.catch_all();
     let input = String::from_utf8_lossy(self.input);
     trace!("catch-all {rule:?} input {input} @{}", self.index);
     if let Some(found) = rule.rx.find_at(self.input, self.index) {
-      let token = Token::new(rule.id, found.as_bytes());
+      let token = Token {
+        id:    rule.id,
+        index: self.index,
+        data:  found.as_bytes().to_vec(),
+      };
       self.index += token.data.len();
       trace!("return catch-all {token:#} index {}", self.index);
       return Some(token);
     }
-
+    */
     unreachable!("catch all rule should have caught invalid input");
   }
 }
 
+/*
 #[cfg(test)]
 mod tests {
   use super::*;
 
+  fn token(id: u16, data: &[u8], index: usize) -> Token {
+    let data = data.to_vec();
+    Token { id, data, index }
+  }
+
   #[test]
   fn test_simple_grammar() {
     crate::grammar! {
-      pub rules<()> {
+      pub mod grammar where type State = () {
         ALL: [],
         INIT: [
           ALPHA: Rule{ group: 1, r"[a-z]+" }
@@ -124,7 +140,10 @@ mod tests {
     axlog::init("T");
     let tokens: Vec<Token> =
       TokenIterator::start(b"test.0", rules::create(), ()).collect();
-
     debug!("tokens: {tokens:?}");
+
+    assert_eq!(tokens[0], token(rules::ALPHA, b"test", 0));
+    assert_eq!(tokens[1], token(rules::CATCH_ALL, b".0", 4));
   }
 }
+*/
