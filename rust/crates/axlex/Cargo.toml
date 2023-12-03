@@ -6,4 +6,6 @@ edition = "2021"
 [dependencies]
 axlog = { path = "../axlog" }
 indexmap = "2"
+paste = "1"
 regex = "1"
+const_format = "0.2"

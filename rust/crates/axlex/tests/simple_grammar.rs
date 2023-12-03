@@ -1,9 +1,12 @@
 #![feature(lazy_cell, const_type_name, const_option)]
 
-use axlex::grammar;
+use axlex::lexer;
+
+#[derive(Clone, Copy)]
+pub struct X(u32);
 
 pub fn main() {
-  grammar! {
+  lexer! {
     example<()> {
       ALL: [],
       init: [ alpha("[a-z]+"), dot(r"\.") ],
