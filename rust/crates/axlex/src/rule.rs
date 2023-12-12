@@ -86,6 +86,10 @@ pub struct Lexer<S: 'static> {
 
 pub const START_GROUP_ID: u8 = 0;
 
+pub const fn rule_of<S>(lexer: &Lexer<S>, rule_id: u16) -> &'static Rule<S> {
+  lexer.rules[rule_id as usize]
+}
+
 #[macro_export]
 macro_rules! g_id {
   { $ident:ident } => { paste::paste!( [< G_ID_ $ident >] ) };

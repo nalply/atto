@@ -13,6 +13,7 @@
 pub mod rule;
 pub mod token;
 
+pub use crate::rule::rule_of;
 pub use crate::token::Token;
 use axlog::*;
 use std::fmt;
