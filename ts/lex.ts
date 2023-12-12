@@ -340,4 +340,4 @@ function assertDefined<T>(value: T | undefined | null): asserts value is T {
     throw new InternalError("assertion failed: value not defined")
 }
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+

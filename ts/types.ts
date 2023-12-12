@@ -11,5 +11,5 @@ export type Entry = { key: Atom, value: Value }
 
 export type List = Value[]
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+
 

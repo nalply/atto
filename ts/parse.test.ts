@@ -70,5 +70,4 @@ const atto = {
 
 Object.assign(window, { atto, expectErr })
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
-
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+

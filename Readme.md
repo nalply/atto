@@ -81,7 +81,7 @@ devDependencies: (
 author: "see AUTHORS"
 dependencies: ()
 
-# Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
+# Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+
 ```
 
 ```
@@ -99,4 +99,4 @@ members: (
 )
 ```
 
-<sub>Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+</sub>
+<sub>Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+</sub>

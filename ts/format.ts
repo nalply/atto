@@ -89,5 +89,4 @@ function formatBare(s: string) {
   return rxBare?.test(s) ? s : '"' + strEsc(s) + '"'
 }
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
-
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+

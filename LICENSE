@@ -1,10 +1,6 @@
-Permission to use, copy, modify, and/or distribute the software is granted,
-provided that all copyright notices appear unchanged in all copies.
+Permission to use, copy, modify, and/or to distribute the works is granted,
+provided that all copyright notices appear unchanged in all copies. The works
+are provided 'as is'. The authors disclaim any warranty whatsoever. In no
+event whatsoever are they liable for any damage in any regard with the works.
 
-THE SOFTWARE IS PROVIDED "AS IS". THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
-REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
-AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
-INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
-LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
-OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
-PERFORMANCE OF THIS SOFTWARE.
+SPDX-License-Identifier: ISC+

@@ -19,4 +19,4 @@ Object.assign(lexer, { asText2 })
 const atto = { compileLexer, lexer, format, parse }
 Object.assign(window, { atto, expect })
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+

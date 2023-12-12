@@ -45,6 +45,4 @@ export default {
   nodeResolve: true,
 }
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
-
-
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+

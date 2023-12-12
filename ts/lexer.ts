@@ -86,5 +86,5 @@ function checkGuard(token: Token): Token | null {
 export const specs = { root, str, guardedStr, esc, guardedEsc, ALL }
 export const lexer = compileLexer(specs)
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+
 

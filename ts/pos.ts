@@ -72,4 +72,4 @@ function isLeafNode (node: Node): node is LeafNode {
   return Object.prototype.hasOwnProperty.call(node, 'index');
 }
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+

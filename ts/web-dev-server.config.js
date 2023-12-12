@@ -45,6 +45,4 @@ export default {
   sslCert: "ssl/localhost.crt",
 }
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
-
-
+// Copyright see AUTHORS & LICENSE &X-License-Identifier: ISC+

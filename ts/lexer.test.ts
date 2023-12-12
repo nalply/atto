@@ -48,5 +48,4 @@ it('lex guarded strings', () => {
 
 })
 
-// Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
-
+// Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+

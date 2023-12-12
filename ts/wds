@@ -5,9 +5,5 @@ WEB_DEV_SERVER="node_modules/.bin/web-dev-server"
 echo $WEB_DEV_SERVER starting...
 eval "DEBUG=d-s:* $WEB_DEV_SERVER"
 
-# Copyright see AUTHORS; see LICENSE; SPDX-License-Identifier: ISC+
-
-
-
-
+# Copyright see AUTHORS & LICENSE; SPDX-License-Identifier: ISC+
 
