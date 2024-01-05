@@ -1,5 +1,7 @@
 # atto
 
+Archived. Successor is `axp`.
+
 ## Overview
 
 atto is an untyped and simple document/configuration language with atoms,
